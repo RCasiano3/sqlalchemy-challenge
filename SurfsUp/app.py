@@ -22,9 +22,6 @@ Base.prepare(autoload_with=engine)
 Measurement = Base.classes.measurement
 Station = Base.classes.station
 
-# Create session from python to the DB
-session = Session(engine)
-
 # Flask Setup
 app = Flask(__name__)
 
@@ -44,6 +41,9 @@ def welcome():
 
 @app.route("/api/v1.0/precipitation")
 def precipitation():
+    
+    # Create session from python to the DB
+    session = Session(engine)
     # Starting from the most recent data point in the database. 
     recentdate = session.query(Measurement).order_by(Measurement.date.desc()).first()
     lastdate = dt.datetime.strptime(recentdate.date, '%Y-%m-%d').date()
@@ -54,10 +54,9 @@ def precipitation():
     filter(Measurement.date >= lastyeardate).all()
     session.close()
     # Creat a dictionary using date and prcp 
-    yearprcp = list.np(ravel(precip_scores))
     
     year_rain = []
-    for date, prcp in yearprcp:
+    for date, prcp in precip_scores:
         raindata = {}
         raindata["date"] = date
         raindata["prcp"] = prcp
@@ -68,10 +67,41 @@ def precipitation():
 
 @app.route("/api/v1.0/stations")
 def stations():
+    session = Session(engine)
+    stationquery = session.query(Station.name, Station.station, Station.elevation).all()
+    session.close()
+    #create dictionary of stations
+    station_list = []
+    for result in stationquery:
+        row = {}
+        row["name"] = result[0]
+        row["station"] = result[1]
+        row["elevation"] = result[2]
+        station_list.append(row)
     
+    # Return a json list of stations
+    return jsonify(station_list)
 @app.route("/api/v1.0/tobs")
 def tobs():
-
+    session = Session(engine)
+    recentdate = session.query(Measurement).order_by(Measurement.date.desc()).first()
+    lastdate = dt.datetime.strptime(recentdate.date, '%Y-%m-%d').date()
+    lastyeardate = lastdate - dt.timedelta(days=365)
+    tempobserved = session.query(Measurement.tobs).filter(Measurement.station == 'USC00519281').\
+    filter(Measurement.date >= lastyeardate).order_by(Measurement.date.desc()).all()
+    session.close()
+    
+    #tobs_list = list(np.ravel(tempobserved))
+    #creast dictionary of tobs
+    tobstotal = []
+    for date, temp in tempobserved:
+        row = {}
+        row["Date"] = date
+        row["Temperature"] = temp
+        tobstotal.append(row)
+        
+    # Return json representative of tobs dictionary
+    return jsonify (tobstotal)
 
 if __name__ == "__main__":
     app.run(debug=True)
